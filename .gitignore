@@ -288,3 +288,4 @@ knowledge/_sources/
 memory/fleet-kg.sqlite
 memory/fleet-kg.sqlite-*
 memory/secrets/
+memory/fleet-kg-verify-stats.json
