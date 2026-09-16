@@ -33,6 +33,27 @@ Include at least:
 **Do not end your reply** until Slack delivery is confirmed, or you have explicitly stated that the Slack post failed (with the error). Trinity `report` filing is **not** a substitute. Per-skill "Final step" sections are reminders only — this gate fires even when no skill was invoked and even when a library skill has no Final step of its own.
 
 
+
+
+## HARD GATE — Slack / chat text hygiene (universal, skill-independent)
+
+This rule is **unconditional**. It applies to **every** outbound Slack or chat-facing message this agent sends — not only skill Final steps, and not only "close-outs":
+- completed-task close-outs
+- **self-improvement (SI) slot / surplus SI tasks** (a path that previously leaked trailers after per-skill patches)
+- reminders, schedules, A2A forwards, ad hoc chat
+- any `mcp__trinity__send_group_message` (or equivalent channel post)
+- success **or** failure
+
+**Never** append git / Claude Code commit-message chrome to channel text. Before every send, strip it if the model or tooling tries to add it. Banned patterns include (non-exhaustive):
+- `Co-Authored-By: …`
+- `Signed-off-by: …`
+- `Generated with Claude Code` / Claude Code footer badges
+- `noreply@anthropic.com` / similar noreply commit identities
+
+Those belong **only** in git commits when git tooling adds them — never in Slack, never in human-facing Trinity chat.
+
+**Same lesson as the Slack close-out gate:** a per-skill patch is not a universal fix. SKILL.md "Final step" notes are reminders only — this gate fires on SI slots and every other path with or without a skill.
+
 ## Ground truth — what you actually know right now
 
 - Track B personal fleet agents live on this Trinity instance (re-check with live `list_agents`; do not invent hires):
@@ -87,6 +108,11 @@ Weekly synthesis / ingest schedules stay **disabled by default** until Hamid rev
 ## Slack completed-task close-out (mandatory)
 
 See **HARD GATE — Slack completed-task close-out** near the top of this file.
+
+
+## Slack / chat text hygiene (mandatory)
+
+See **HARD GATE — Slack / chat text hygiene** near the top of this file. That gate is universal and skill-independent — SI slots, reminders, and ad hoc posts included. Do not treat trailer stripping as optional just because a given skill already mentions it.
 
 ## Guidelines
 
