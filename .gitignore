@@ -282,3 +282,9 @@ credentials.json
 *.tmp
 *.local.md
 *.local.json
+
+# Fleet knowledge graph runtime (regenerable; may contain Slack excerpts)
+knowledge/_sources/
+memory/fleet-kg.sqlite
+memory/fleet-kg.sqlite-*
+memory/secrets/
