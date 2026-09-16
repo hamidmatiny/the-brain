@@ -1,14 +1,32 @@
 #!/usr/bin/env bash
-# Read-only refresh of sibling AEGIS agent repos under ~/knowledge/.
-# Used by /synthesize pull-gate: exit 0 only when all four clones refresh and
-# short SHAs print. Fail closed on any error (do not leave partial success silent).
+# Read-only refresh of fleet agent repos under ~/knowledge/.
+# Used by /synthesize and /ingest-fleet-kg pull-gates.
+# Exit 0 only when ALL configured fleet clones refresh and short SHAs print.
+# Fail closed on any error (do not leave partial success silent).
 set -euo pipefail
 
 KNOWLEDGE_ROOT="${KNOWLEDGE_ROOT:-$HOME/knowledge}"
 mkdir -p "$KNOWLEDGE_ROOT"
 
-# Ordered list — synthesize pull-gate expects these four names.
-SIBLINGS=(aegis-ceo aegis-infra aegis-threat-intel aegis-analyst)
+# Full Track B fleet (the-brain included so VP can index its own mandate).
+# Override with FLEET_REPOS="aegis-ceo aegis-infra ..." if needed.
+if [[ -n "${FLEET_REPOS:-}" ]]; then
+  # shellcheck disable=SC2206
+  SIBLINGS=(${FLEET_REPOS})
+else
+  SIBLINGS=(
+    aegis-ceo
+    aegis-infra
+    aegis-threat-intel
+    aegis-analyst
+    aegis-core-infra
+    aegis-data-quality
+    aegis-growth
+    the-brain
+  )
+fi
+
+EXPECTED="${#SIBLINGS[@]}"
 
 # Prefer HTTPS with a read token if present; else SSH deploy key ~/.ssh/id_<repo>.
 # Never push. Never write remotes.
@@ -50,7 +68,6 @@ pull_one() {
     "${git_ssh[@]}" git clone --depth 1 "$url" "$dest"
   else
     echo "pull $name" >&2
-    # Ensure remote stays the intended URL shape without printing secrets.
     (
       cd "$dest"
       "${git_ssh[@]}" git remote set-url origin "$url"
@@ -71,7 +88,6 @@ pull_one() {
     echo "ERROR: missing short SHA for $name" >&2
     return 1
   fi
-  # Machine-readable line for the synthesize pull-gate.
   echo "${name}=${sha}"
 }
 
@@ -83,7 +99,6 @@ for name in "${SIBLINGS[@]}"; do
     failed=1
     continue
   fi
-  # pull_one may print clone/pull logs on stderr; keep only name=sha lines.
   line="$(printf '%s\n' "$out" | grep -E "^${name}=[0-9a-f]+$" | tail -1 || true)"
   if [[ -z "$line" ]]; then
     echo "ERROR: no SHA line for $name" >&2
@@ -95,13 +110,13 @@ for name in "${SIBLINGS[@]}"; do
 done
 
 if [[ "$failed" -ne 0 ]]; then
-  echo "status=pull-failed count=${#shas[@]}/4" >&2
+  echo "status=pull-failed count=${#shas[@]}/${EXPECTED}" >&2
   exit 1
 fi
-if [[ "${#shas[@]}" -ne 4 ]]; then
-  echo "status=pull-failed expected 4 SHAs got ${#shas[@]}" >&2
+if [[ "${#shas[@]}" -ne "$EXPECTED" ]]; then
+  echo "status=pull-failed expected ${EXPECTED} SHAs got ${#shas[@]}" >&2
   exit 1
 fi
 
-echo "status=ok" >&2
+echo "status=ok repos=${EXPECTED}" >&2
 exit 0

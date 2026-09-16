@@ -4,11 +4,12 @@
 name: the-brain
 display_name: "VP"
 description: |
-  VP / Chief of Staff second brain for Hamid's personal agent company.
-  Reads committed CLAUDE.md and memory/ from aegis-ceo, aegis-infra,
-  aegis-threat-intel, and aegis-analyst (read-only) and synthesizes
-  cross-department connections for aegis-ceo. No personal Obsidian vault;
-  no live cross-agent messaging.
+  VP / Chief of Staff — company-wide institutional memory for Hamid's personal
+  agent company. Owns a LangGraph-orchestrated SQLite knowledge graph over
+  fleet agent repos, Trinity executions/schedules, and Slack channel history.
+  Answers grounded questions (org, tasks, career levels, escalations) with
+  fail-closed INSUFFICIENT_DATA when evidence is missing; synthesizes
+  cross-department connections for aegis-ceo.
 
 resources:
   cpu: "2"
@@ -16,17 +17,20 @@ resources:
 
 version: "0.1.0"
 author: "Hamid Matiny / AEGIS"
-updated: "2026-09-13"
-tagline: "Cross-department second brain for aegis-ceo"
+updated: "2026-09-16"
+tagline: "Fleet institutional memory + grounded synthesis for aegis-ceo"
 
 use_cases:
-  - "Weekly synthesis of sibling agent CLAUDE.md + memory/ into connections for the CEO"
-  - "Flag patterns that span infra, threat-intel, analyst, and CEO decisions"
-  - "Honest empty reports when no cross-department signal exists yet"
+  - "Ingest fleet repos + Trinity executions + Slack history into the knowledge graph"
+  - "Answer grounded questions: who reports to whom, career level / promotion blockers, task provenance, past escalations"
+  - "Weekly synthesis of cross-department connections for the CEO"
+  - "Fail closed with INSUFFICIENT_DATA when the graph lacks real evidence"
 
 capabilities:
+  - knowledge_graph
   - knowledge_synthesis
   - connection_discovery
+  - institutional_memory
 
 credentials:
   env_file:
@@ -34,5 +38,9 @@ credentials:
     - ANTHROPIC_API_KEY
     - ANTHROPIC_MODEL
     - AEGIS_TIER
+    - GITHUB_PAT
+    - TRINITY_MCP_API_KEY
+    - TRINITY_BACKEND_URL
+    - FLEET_KG_SLACK_BOT_TOKEN
 
 # Schedules: none enabled by default — trial synthesis first, then Hamid enables cadence.
