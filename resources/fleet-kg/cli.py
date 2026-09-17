@@ -17,7 +17,8 @@ def main() -> int:
     parser.add_argument("--db", default="", help="SQLite path (default ~/memory/fleet-kg.sqlite)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("ingest", help="Pull sources and ingest into the graph")
+    ing = sub.add_parser("ingest", help="Pull sources and ingest into the graph (incremental; skips if recent)")
+    ing.add_argument("--force", action="store_true", help="Bypass 90-minute recent-ingest skip")
     q = sub.add_parser("query", help="Ask a grounded question")
     q.add_argument("question", nargs="+", help="Question text")
     sub.add_parser("stats", help="Print graph stats")
@@ -30,7 +31,7 @@ def main() -> int:
     if args.cmd == "ingest":
         from ingest.pipeline import run_ingest
 
-        summary = run_ingest(db)
+        summary = run_ingest(db, force=getattr(args, "force", False))
         print(json.dumps(summary, indent=2, default=str))
         return 0 if summary.get("status") in ("ok", "partial") else 1
 

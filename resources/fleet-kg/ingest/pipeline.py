@@ -592,7 +592,37 @@ def build_ingest_graph():
     return g.compile()
 
 
-def run_ingest(store_path: str | None = None) -> dict[str, Any]:
+def run_ingest(store_path: str | None = None, force: bool = False) -> dict[str, Any]:
+    """Pull sources into the graph.
+
+    Incremental by design:
+    - nodes/edges upsert in place
+    - source_refs dedupe on (target, kind, uri) — no inflation on re-run
+    - skip entirely if a successful ingest finished within the last 90 minutes
+      (unless force=True), to avoid overlapping schedule/retry stampede
+    """
+    from datetime import datetime, timezone, timedelta
+
+    store = FleetGraphStore(store_path)
+    if not force:
+        last = store.last_successful_ingest()
+        if last and last.get("finished_at"):
+            try:
+                fin = datetime.fromisoformat(last["finished_at"].replace("Z", "+00:00"))
+                if datetime.now(timezone.utc) - fin < timedelta(minutes=90):
+                    summary = {
+                        "status": "ok",
+                        "skipped": True,
+                        "reason": "recent_successful_ingest",
+                        "last_ingest": last,
+                        "stats": store.stats(),
+                    }
+                    store.close()
+                    return summary
+            except Exception:
+                pass
+    store.close()
+
     app = build_ingest_graph()
     result = app.invoke({"store_path": store_path or "", "summary": {}, "errors": []})
     return result.get("summary") or {}

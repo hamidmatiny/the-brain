@@ -26,6 +26,7 @@ class FleetGraphStore:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self._init_schema()
+        self._ensure_source_dedupe_index()
 
     def _init_schema(self) -> None:
         self.conn.executescript(
@@ -79,6 +80,27 @@ class FleetGraphStore:
             """
         )
         self.conn.commit()
+
+    def _ensure_source_dedupe_index(self) -> None:
+        """Idempotent migration: unique (target, kind, uri) so re-ingest is incremental on refs."""
+        # Drop prior duplicates (keep lowest id) so CREATE UNIQUE INDEX can succeed on existing DBs.
+        self.conn.execute(
+            """
+            DELETE FROM source_refs
+             WHERE id NOT IN (
+               SELECT MIN(id) FROM source_refs
+                GROUP BY node_or_edge_id, source_kind, source_uri
+             )
+            """
+        )
+        self.conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_src_dedupe
+              ON source_refs(node_or_edge_id, source_kind, source_uri)
+            """
+        )
+        self.conn.commit()
+
 
     def close(self) -> None:
         self.conn.close()
@@ -157,10 +179,35 @@ class FleetGraphStore:
         self.conn.commit()
 
     def add_source(self, target_id: str, kind: str, uri: str, excerpt: str = "") -> None:
-        self.conn.execute(
-            "INSERT INTO source_refs(node_or_edge_id, source_kind, source_uri, excerpt, fetched_at) VALUES (?,?,?,?,?)",
-            (target_id, kind, uri, excerpt[:2000], _utc_now()),
-        )
+        # Incremental: skip duplicate (target, kind, uri). Re-ingest must not inflate source_refs.
+        row = self.conn.execute(
+            """
+            SELECT id FROM source_refs
+             WHERE node_or_edge_id=? AND source_kind=? AND source_uri=?
+             LIMIT 1
+            """,
+            (target_id, kind, uri),
+        ).fetchone()
+        if row:
+            # Refresh excerpt/timestamp only when content changed
+            self.conn.execute(
+                """
+                UPDATE source_refs
+                   SET excerpt=?, fetched_at=?
+                 WHERE id=? AND IFNULL(excerpt,'') != ?
+                """,
+                (excerpt[:2000], _utc_now(), row["id"], excerpt[:2000]),
+            )
+            self.conn.commit()
+            return
+        try:
+            self.conn.execute(
+                "INSERT INTO source_refs(node_or_edge_id, source_kind, source_uri, excerpt, fetched_at) VALUES (?,?,?,?,?)",
+                (target_id, kind, uri, excerpt[:2000], _utc_now()),
+            )
+        except sqlite3.IntegrityError:
+            # Race / pre-existing unique index
+            pass
         self.conn.commit()
 
     def get_node(self, node_id: str) -> dict[str, Any] | None:
@@ -261,6 +308,25 @@ class FleetGraphStore:
             "source_refs": s,
             "nodes_by_type": by_type,
             "sources_by_kind": by_kind,
+        }
+
+    def last_successful_ingest(self) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, started_at, finished_at, status, summary_json
+              FROM ingest_runs
+             WHERE status IN ('ok','partial') AND finished_at IS NOT NULL
+             ORDER BY id DESC LIMIT 1
+            """
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "started_at": row["started_at"],
+            "finished_at": row["finished_at"],
+            "status": row["status"],
+            "summary": json.loads(row["summary_json"] or "{}"),
         }
 
     def begin_ingest(self) -> int:
