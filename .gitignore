@@ -289,3 +289,8 @@ memory/fleet-kg.sqlite
 memory/fleet-kg.sqlite-*
 memory/secrets/
 memory/fleet-kg-verify-stats.json
+
+# Claude Code runtime state, not source
+.claude/telemetry/
+.claude/tasks/
+.credentials.enc
